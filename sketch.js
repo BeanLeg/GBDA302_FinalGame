@@ -3,7 +3,7 @@ const CANVAS_H = 800;
 const WORLD_W = 2000;
 const WORLD_H = 1600;
 const PLAYER_SPEED = 3.2;
-const PLAYER_RADIUS = 30;
+const PLAYER_RADIUS = 25;
 const FLASHLIGHT_DISTANCE = 300;
 const FLASHLIGHT_ANGLE = Math.PI / 2;
 const CAM_SMOOTHING = 0.08;
@@ -425,7 +425,7 @@ function drawPlayer() {
   fill(220);
   stroke(255);
   strokeWeight(2);
-  image(playerImg, 0, 0, player.r * 2, player.r * 2);
+  image(playerImg, 0, 0, player.r * 2.4, player.r * 2.4);
   pop();
 }
 
