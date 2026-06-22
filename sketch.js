@@ -1,11 +1,11 @@
 const CANVAS_W = 800;
-const CANVAS_H = 600;
+const CANVAS_H = 800;
 const WORLD_W = 2000;
 const WORLD_H = 1600;
 const PLAYER_SPEED = 3.2;
-const PLAYER_RADIUS = 10;
-const FLASHLIGHT_DISTANCE = 360;
-const FLASHLIGHT_ANGLE = Math.PI / 3;
+const PLAYER_RADIUS = 30;
+const FLASHLIGHT_DISTANCE = 300;
+const FLASHLIGHT_ANGLE = Math.PI / 2;
 const CAM_SMOOTHING = 0.08;
 
 let player;
@@ -14,11 +14,37 @@ let walls = [];
 let keyItem;
 let door;
 let gameState;
+let pressedKeys = {};
+
+// Tile map variables (loaded from data/blocks.json)
+let tileWallImg, tileCornerImg, tileFloorImg;
+let tileMapData;
+let TILE_SIZE = 40;
+let mapCols = 50;
+let mapRows = 40;
+
+function preload() {
+  // Load tile images and the tilemap JSON
+  tileWallImg = loadImage("assets/images/wall.png");
+  tileCornerImg = loadImage("assets/images/corner.png");
+  tileFloorImg = loadImage("assets/images/floor.png");
+  playerImg = loadImage("assets/images/maincharacter.png");
+  tileMapData = loadJSON("data/blocks.json");
+}
 
 function setup() {
   createCanvas(CANVAS_W, CANVAS_H);
   textFont("monospace");
+  noCursor();
   camera = { x: 0, y: 0 };
+
+  // If the JSON provided different sizing, use it
+  if (tileMapData) {
+    TILE_SIZE = tileMapData.tileSize || TILE_SIZE;
+    mapCols = tileMapData.cols || mapCols;
+    mapRows = tileMapData.rows || mapRows;
+  }
+
   initGame();
 }
 
@@ -30,45 +56,57 @@ function initGame() {
     hasKey: false,
   };
 
-  walls = [
-    // Outer boundary
-    { x: 0, y: 0, w: WORLD_W, h: 30 },
-    { x: 0, y: WORLD_H - 30, w: WORLD_W, h: 30 },
-    { x: 0, y: 0, w: 30, h: WORLD_H },
-    { x: WORLD_W - 30, y: 0, w: 30, h: WORLD_H / 2 - 100 },
-    { x: WORLD_W - 30, y: WORLD_H / 2 + 100, w: 30, h: WORLD_H },
+  // Build walls from tile map JSON
+  walls = [];
+  if (tileMapData && tileMapData.tiles) {
+    for (let row = 0; row < mapRows; row++) {
+      let line = tileMapData.tiles[row] || "";
+      for (let col = 0; col < mapCols; col++) {
+        let ch = line[col] || ".";
+        // Check for wall tiles (W, L, B, R, T) and corner tiles (C, N, E, S, W)
+        if (
+          ch === "W" ||
+          ch === "C" ||
+          ch === "L" ||
+          ch === "B" ||
+          ch === "R" ||
+          ch === "T" ||
+          ch === "N" ||
+          ch === "E" ||
+          ch === "S"
+        ) {
+          walls.push({
+            x: col * TILE_SIZE,
+            y: row * TILE_SIZE,
+            w: TILE_SIZE,
+            h: TILE_SIZE,
+          });
+        }
+      }
+    }
+  }
 
-    // Main corridor horizontal
-    { x: 0, y: 300, w: 600, h: 30 },
-    { x: 800, y: 300, w: WORLD_W - 800, h: 30 },
-
-    // Main corridor vertical sections
-    { x: 300, y: 100, w: 30, h: 300 },
-    { x: 800, y: 100, w: 30, h: 400 },
-    { x: 1400, y: 200, w: 30, h: 600 },
-
-    // Room 1 - left side
-    { x: 100, y: 450, w: 400, h: 30 },
-    { x: 100, y: 450, w: 30, h: 300 },
-    { x: 470, y: 450, w: 30, h: 300 },
-
-    // Room 2 - middle section
-    { x: 600, y: 500, w: 300, h: 30 },
-    { x: 600, y: 500, w: 30, h: 250 },
-    { x: 870, y: 500, w: 30, h: 250 },
-
-    // Room 3 - right side with door
-    { x: 1100, y: 400, w: 450, h: 30 },
-    { x: 1100, y: 400, w: 30, h: 350 },
-    { x: 1520, y: 550, w: 30, h: 200 },
-
-    // Additional maze walls
-    { x: 700, y: 150, w: 200, h: 30 },
-    { x: 900, y: 700, w: 400, h: 30 },
-    { x: 1300, y: 900, w: 350, h: 30 },
-    { x: 400, y: 900, w: 500, h: 30 },
-    { x: 200, y: 1100, w: 600, h: 30 },
-  ];
+  // Ensure player doesn't start inside a wall tile; move to first floor tile if needed
+  if (
+    (tileMapData &&
+      tileMapData.tiles &&
+      collidesWithWalls(player.x, player.y)) ||
+    (!tileMapData && collidesWithWalls(player.x, player.y))
+  ) {
+    let found = false;
+    for (let row = 0; row < mapRows && !found; row++) {
+      let line = tileMapData.tiles[row] || "";
+      for (let col = 0; col < mapCols; col++) {
+        let ch = line[col] || ".";
+        if (ch === ".") {
+          player.x = col * TILE_SIZE + TILE_SIZE / 2;
+          player.y = row * TILE_SIZE + TILE_SIZE / 2;
+          found = true;
+          break;
+        }
+      }
+    }
+  }
 
   keyItem = {
     x: 1300,
@@ -107,15 +145,12 @@ function draw() {
   drawDoor();
   drawPlayer();
   drawKey();
-  //text(player.x + ", " + player.y, player.x, player.y - 20);
 
   pop();
 
   drawUI();
 
-  if (gameState === "win") {
-    drawWinScreen();
-  }
+  if (gameState === "win") drawWinScreen();
 }
 
 function updateCamera() {
@@ -133,10 +168,17 @@ function updatePlayer() {
   let moveX = 0;
   let moveY = 0;
 
-  if (keyIsDown(65) || keyIsDown(LEFT_ARROW)) moveX -= PLAYER_SPEED;
-  if (keyIsDown(68) || keyIsDown(RIGHT_ARROW)) moveX += PLAYER_SPEED;
-  if (keyIsDown(87) || keyIsDown(UP_ARROW)) moveY -= PLAYER_SPEED;
-  if (keyIsDown(83) || keyIsDown(DOWN_ARROW)) moveY += PLAYER_SPEED;
+  // Arrow keys via keyIsDown
+  if (keyIsDown(LEFT_ARROW)) moveX -= PLAYER_SPEED;
+  if (keyIsDown(RIGHT_ARROW)) moveX += PLAYER_SPEED;
+  if (keyIsDown(UP_ARROW)) moveY -= PLAYER_SPEED;
+  if (keyIsDown(DOWN_ARROW)) moveY += PLAYER_SPEED;
+
+  // WASD support via pressedKeys map (robust across focus/focus issues)
+  if (pressedKeys["a"] || pressedKeys["A"]) moveX -= PLAYER_SPEED;
+  if (pressedKeys["d"] || pressedKeys["D"]) moveX += PLAYER_SPEED;
+  if (pressedKeys["w"] || pressedKeys["W"]) moveY -= PLAYER_SPEED;
+  if (pressedKeys["s"] || pressedKeys["S"]) moveY += PLAYER_SPEED;
 
   movePlayer(moveX, 0);
   movePlayer(0, moveY);
@@ -165,6 +207,54 @@ function movePlayer(dx, dy) {
 }
 
 function collidesWithWalls(cx, cy) {
+  // If we have tile map data, use tile-based collision (check tiles overlapped by the player circle)
+  if (tileMapData && tileMapData.tiles) {
+    // Bounding box for the player's circle
+    let left = cx - player.r;
+    let right = cx + player.r;
+    let top = cy - player.r;
+    let bottom = cy + player.r;
+
+    let colLeft = floor(left / TILE_SIZE);
+    let colRight = floor(right / TILE_SIZE);
+    let rowTop = floor(top / TILE_SIZE);
+    let rowBottom = floor(bottom / TILE_SIZE);
+
+    colLeft = constrain(colLeft, 0, mapCols - 1);
+    colRight = constrain(colRight, 0, mapCols - 1);
+    rowTop = constrain(rowTop, 0, mapRows - 1);
+    rowBottom = constrain(rowBottom, 0, mapRows - 1);
+
+    for (let r = rowTop; r <= rowBottom; r++) {
+      let line = tileMapData.tiles[r] || "";
+      for (let c = colLeft; c <= colRight; c++) {
+        let ch = line[c] || ".";
+        if (
+          ch === "T" ||
+          ch === "B" ||
+          ch === "L" ||
+          ch === "R" ||
+          ch === "C" ||
+          ch === "N" ||
+          ch === "E" ||
+          ch === "S" ||
+          ch === "W"
+        ) {
+          // Precise check: ensure circle intersects this tile rect
+          let rx = c * TILE_SIZE;
+          let ry = r * TILE_SIZE;
+          if (
+            circleRectCollision(cx, cy, player.r, rx, ry, TILE_SIZE, TILE_SIZE)
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // Fallback: rectangle list collision
   for (let wall of walls) {
     if (circleRectCollision(cx, cy, player.r, wall.x, wall.y, wall.w, wall.h)) {
       return true;
@@ -215,25 +305,85 @@ function checkWinCondition() {
 }
 
 function drawRoom() {
-  noStroke();
-  fill(35);
-  rect(0, 0, WORLD_W, WORLD_H);
+  // Draw tiled floor and walls from the tile map if available
+  if (tileMapData && tileMapData.tiles) {
+    // Draw floor tiles across the whole map
+    for (let row = 0; row < mapRows; row++) {
+      let line = tileMapData.tiles[row] || "";
+      for (let col = 0; col < mapCols; col++) {
+        let x = col * TILE_SIZE;
+        let y = row * TILE_SIZE;
+        // Draw floor
+        if (tileFloorImg) image(tileFloorImg, x, y, TILE_SIZE, TILE_SIZE);
 
-  fill(45);
-  rect(15, 15, WORLD_W - 30, WORLD_H - 30, 12);
+        // Draw wall or corner on top if present
+        let ch = line[col] || ".";
+        let rotationAngle = 0;
+        let isWall = false;
+        let isCorner = false;
 
-  // Draw walls
-  fill(100, 100, 170);
-  for (let wall of walls) {
-    rect(wall.x, wall.y, wall.w, wall.h, 4);
+        // Determine tile type and rotation
+        // Walls: L (0°), B (90°), R (180°), T (270°)
+        // Corners: N (0°), E (90°), S (180°), W (270°)
+        if (ch === "L" || ch === "B" || ch === "R" || ch === "T") {
+          isWall = true;
+          if (ch === "L") rotationAngle = 0;
+          else if (ch === "T") rotationAngle = HALF_PI;
+          else if (ch === "R") rotationAngle = PI;
+          else if (ch === "B") rotationAngle = PI + HALF_PI;
+        } else if (ch === "N" || ch === "E" || ch === "S" || ch === "W") {
+          isCorner = true;
+          if (ch === "N") rotationAngle = 0;
+          else if (ch === "E") rotationAngle = HALF_PI;
+          else if (ch === "S") rotationAngle = PI;
+          else if (ch === "W") rotationAngle = PI + HALF_PI;
+        } else if (ch === "C") {
+          // Backward compat: C is regular corner (0°)
+          isCorner = true;
+          rotationAngle = 0;
+        }
+
+        // Draw rotated wall or corner
+        if (isWall) {
+          push();
+          translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+          rotate(rotationAngle);
+          if (tileWallImg)
+            image(
+              tileWallImg,
+              -TILE_SIZE / 2,
+              -TILE_SIZE / 2,
+              TILE_SIZE,
+              TILE_SIZE,
+            );
+          else {
+            noStroke();
+            fill(100, 100, 170);
+            rect(-TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          }
+          pop();
+        } else if (isCorner) {
+          push();
+          translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+          rotate(rotationAngle);
+          if (tileCornerImg)
+            image(
+              tileCornerImg,
+              -TILE_SIZE / 2,
+              -TILE_SIZE / 2,
+              TILE_SIZE,
+              TILE_SIZE,
+            );
+          else {
+            noStroke();
+            fill(140, 120, 200);
+            rect(-TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          }
+          pop();
+        }
+      }
+    }
   }
-
-  /* Draw visible border around room
-  stroke(80, 70, 100);
-  strokeWeight(3);
-  noFill();
-  rect(15, 15, WORLD_W - 30, WORLD_H - 30, 12);
-  */
 }
 
 function drawKey() {
@@ -269,15 +419,13 @@ function drawDoor() {
 }
 
 function drawPlayer() {
+  imageMode(CENTER);
   push();
   translate(player.x, player.y);
   fill(220);
   stroke(255);
   strokeWeight(2);
-  ellipse(0, 0, player.r * 2);
-  noStroke();
-  fill(110, 220, 255);
-  ellipse(0, 0, player.r * 1.2);
+  image(playerImg, 0, 0, player.r * 2, player.r * 2);
   pop();
 }
 
@@ -327,7 +475,7 @@ function drawFog() {
 
   drawingContext.restore();
 
-  fill(255, 230, 150, 100);
+  fill(255, 230, 150); //flashlight cone color
   noStroke();
   beginShape();
   vertex(centerX, centerY);
@@ -565,7 +713,14 @@ function drawWinScreen() {
 }
 
 function keyPressed() {
+  // Track pressed key for WASD support
+  if (key && key.length === 1) pressedKeys[key] = true;
+
   if ((key === "r" || key === "R") && gameState === "win") {
     initGame();
   }
+}
+
+function keyReleased() {
+  if (key && key.length === 1) pressedKeys[key] = false;
 }
