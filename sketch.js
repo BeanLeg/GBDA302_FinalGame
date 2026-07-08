@@ -7,7 +7,7 @@
 const CANVAS_W = 800;
 const CANVAS_H = 800;
 const WORLD_W = 2000;
-const WORLD_H = 1600;
+const WORLD_H = 950;
 const PLAYER_SPEED = 3.2;
 const PLAYER_RADIUS = 25;
 const FLASHLIGHT_DISTANCE = 300;
@@ -641,8 +641,64 @@ function draw() {
   if (gameState === "tutorial" && !tutorialIntroDismissed) drawTutorialIntro();
 
   drawFade();
-
+  drawMinimap();
   drawCursor();
+}
+
+function drawMinimap() {
+  if (gameState !== "play" || !(tileMapData && tileMapData.tiles)) return;
+
+  const margin = 16;
+  const minimapW = 180;
+  const minimapH = 140;
+  const minimapX = margin;
+  const minimapY = height - minimapH - margin;
+  const scaleX = minimapW / WORLD_W;
+  const scaleY = minimapH / WORLD_H;
+
+  push();
+  translate(minimapX, minimapY);
+
+  noStroke();
+  fill(0, 170);
+  rect(0, 0, minimapW, minimapH, 10);
+
+  stroke(170);
+  strokeWeight(1.5);
+  noFill();
+  rect(0, 0, minimapW, minimapH, 10);
+
+  fill(180);
+  noStroke();
+  textSize(12);
+  textAlign(LEFT, TOP);
+  text("MAP", 10, 8);
+
+  // Draw the room layout walls/obstacles in a subtle tone.
+  fill(120, 120, 140, 220);
+  noStroke();
+  for (let row = 0; row < mapRows; row++) {
+    const line = tileMapData.tiles[row] || "";
+    for (let col = 0; col < mapCols; col++) {
+      const ch = line[col] || ".";
+      if ("LRUBNESWCTDG".includes(ch)) {
+        rect(
+          col * TILE_SIZE * scaleX,
+          row * TILE_SIZE * scaleY,
+          TILE_SIZE * scaleX,
+          TILE_SIZE * scaleY,
+        );
+      }
+    }
+  }
+
+  if (player) {
+    fill(255, 220, 80);
+    noStroke();
+    ellipse(player.x * scaleX, player.y * scaleY, 6, 6);
+  }
+
+  pop();
 }
 
 // Custom mouse cursor, centered on the pointer, always drawn last so it
@@ -1012,7 +1068,13 @@ function drawRoom() {
         push();
         translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
         if (carpetTopImg && carpetTopImg.width) {
-          image(carpetTopImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          image(
+            carpetTopImg,
+            -TILE_SIZE / 2,
+            -TILE_SIZE / 2,
+            TILE_SIZE,
+            TILE_SIZE,
+          );
         } else {
           noStroke();
           fill(120, 40, 40);
@@ -1025,7 +1087,13 @@ function drawRoom() {
         translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
         rotate(HALF_PI);
         if (carpetTopImg && carpetTopImg.width) {
-          image(carpetTopImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          image(
+            carpetTopImg,
+            -TILE_SIZE / 2,
+            -TILE_SIZE / 2,
+            TILE_SIZE,
+            TILE_SIZE,
+          );
         } else {
           noStroke();
           fill(120, 40, 40);
@@ -1038,7 +1106,13 @@ function drawRoom() {
         translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
         rotate(PI);
         if (carpetTopImg && carpetTopImg.width) {
-          image(carpetTopImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          image(
+            carpetTopImg,
+            -TILE_SIZE / 2,
+            -TILE_SIZE / 2,
+            TILE_SIZE,
+            TILE_SIZE,
+          );
         } else {
           noStroke();
           fill(120, 40, 40);
@@ -1051,7 +1125,13 @@ function drawRoom() {
         translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
         rotate(PI + HALF_PI);
         if (carpetTopImg && carpetTopImg.width) {
-          image(carpetTopImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          image(
+            carpetTopImg,
+            -TILE_SIZE / 2,
+            -TILE_SIZE / 2,
+            TILE_SIZE,
+            TILE_SIZE,
+          );
         } else {
           noStroke();
           fill(120, 40, 40);
@@ -1080,7 +1160,8 @@ function drawFurniture() {
       let ch = line[col] || ".";
 
       if (ch !== "T" && ch !== "D" && ch !== "H" && ch !== "G") continue;
-      if (!isInFlashlight(x + TILE_SIZE / 2, y + TILE_SIZE / 2, { x, y })) continue;
+      if (!isInFlashlight(x + TILE_SIZE / 2, y + TILE_SIZE / 2, { x, y }))
+        continue;
 
       if (ch === "T") {
         drawTile(tableImg, x, y, 0, color(139, 90, 43));
@@ -1573,7 +1654,7 @@ function drawUI() {
   if (!player.hasKey)
     text(
       "The locked door glows red until you find the key.",
-      width / 2,
+      width / 2 + 20,
       height - 24,
     );
   else
